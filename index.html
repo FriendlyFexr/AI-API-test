@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Generator Interface</title>
+    <title>AI Multi-Model Comparison Dashboard</title>
     <style>
         * {
             box-sizing: border-box;
@@ -13,7 +13,7 @@
         body {
             background-color: #0d1117;
             color: #c9d1d9;
-            max-width: 900px;
+            max-width: 1100px;
             margin: 0 auto;
             padding: 20px;
         }
@@ -22,6 +22,7 @@
             font-size: 1.5rem;
             margin-bottom: 20px;
             color: #f0f6fc;
+            text-align: center;
         }
 
         .container {
@@ -32,12 +33,18 @@
             margin-bottom: 20px;
         }
 
-        /* Toggle switch */
+        /* Controls Layout */
+        .controls-bar {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
         .toggle-group {
             display: flex;
             align-items: center;
-            gap: 12px;
-            margin-bottom: 16px;
+            gap: 10px;
             font-size: 0.9rem;
         }
 
@@ -85,13 +92,14 @@
 
         .mode-label {
             font-weight: 600;
-            color: #f0f6fc;
+            color: #58a6ff;
         }
 
-        /* Input Bar Layout */
         .input-group {
             display: flex;
+            flex: 1;
             gap: 10px;
+            min-width: 300px;
         }
 
         input[type="text"] {
@@ -109,7 +117,6 @@
             border-color: #58a6ff;
         }
 
-        /* Green Submit Button */
         .btn-green {
             background-color: #238636;
             color: #ffffff;
@@ -122,27 +129,27 @@
             white-space: nowrap;
         }
 
-        .btn-green:hover {
-            background-color: #2ea043;
-        }
+        .btn-green:hover { background-color: #2ea043; }
+        .btn-green:disabled { background-color: #23863680; cursor: not-allowed; }
 
-        .btn-green:disabled {
-            background-color: #23863680;
-            cursor: not-allowed;
-        }
-
-        /* Side-by-Side Output Grid */
-        .output-grid {
+        /* Side-by-Side Comparison Grid */
+        .comparison-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 20px;
             margin-bottom: 20px;
         }
 
-        @media (max-width: 600px) {
-            .output-grid {
+        @media (max-width: 768px) {
+            .comparison-grid {
                 grid-template-columns: 1fr;
             }
+        }
+
+        .provider-column {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
         }
 
         .output-box {
@@ -161,6 +168,17 @@
             font-weight: 600;
             color: #f0f6fc;
             border-bottom: 1px solid #30363d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .badge {
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 12px;
+            background-color: #30363d;
+            color: #8b949e;
         }
 
         .output-content {
@@ -185,12 +203,12 @@
 
         video {
             width: 100%;
-            max-height: 220px;
+            max-height: 240px;
             border-radius: 6px;
             outline: none;
         }
 
-        /* Debug Console Section */
+        /* Debug Console */
         .debug-container {
             background-color: #161b22;
             border: 1px solid #30363d;
@@ -219,9 +237,7 @@
             font-size: 0.8rem;
         }
 
-        .clear-btn:hover {
-            text-decoration: underline;
-        }
+        .clear-btn:hover { text-decoration: underline; }
 
         #debug-log {
             background-color: #0d1117;
@@ -244,69 +260,84 @@
 </head>
 <body>
 
-    <h1>AI Request Dashboard</h1>
+    <h1>Gemini vs OpenAI Comparison Dashboard</h1>
 
-    <!-- Input Box & Mode Selection -->
     <div class="container">
-        <div class="toggle-group">
-            <span>Text Gen</span>
-            <label class="switch">
-                <input type="checkbox" id="mode-toggle">
-                <span class="slider"></span>
-            </label>
-            <span>Video Gen</span>
-            <span class="mode-label" id="current-mode-label">(Current: Text Generation)</span>
-        </div>
-
-        <div class="input-group">
-            <input type="text" id="prompt-input" placeholder="Enter your prompt here..." />
-            <button class="btn-green" id="submit-btn" onclick="sendRequest()">Generate</button>
-        </div>
-    </div>
-
-    <!-- Separate Display Boxes -->
-    <div class="output-grid">
-        <!-- Text Box -->
-        <div class="output-box">
-            <div class="output-title">Text Generation Output</div>
-            <div class="output-content" id="text-output">
-                <span>No text generated yet.</span>
+        <div class="controls-bar">
+            <!-- Mode Selector -->
+            <div class="toggle-group">
+                <span>Text Mode</span>
+                <label class="switch">
+                    <input type="checkbox" id="mode-toggle">
+                    <span class="slider"></span>
+                </label>
+                <span>Video Mode</span>
             </div>
-        </div>
 
-        <!-- Video Box -->
-        <div class="output-box">
-            <div class="output-title">Video Generation Output</div>
-            <div class="output-content" id="video-output">
-                <span>No video generated yet.</span>
+            <!-- Input Form -->
+            <div class="input-group">
+                <input type="text" id="prompt-input" placeholder="Enter prompt to test both models..." />
+                <button class="btn-green" id="submit-btn" onclick="sendRequest()">Generate Both</button>
             </div>
         </div>
     </div>
 
-    <!-- Debug Log Panel -->
+    <!-- Side-by-Side Comparison Layout -->
+    <div class="comparison-grid">
+        
+        <!-- Google Gemini Column -->
+        <div class="provider-column">
+            <div class="output-box">
+                <div class="output-title">
+                    <span>Google Gemini API</span>
+                    <span class="badge" id="gemini-status">Idle</span>
+                </div>
+                <div class="output-content" id="gemini-output">
+                    <span>Awaiting prompt submission...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- OpenAI Column -->
+        <div class="provider-column">
+            <div class="output-box">
+                <div class="output-title">
+                    <span>OpenAI API</span>
+                    <span class="badge" id="openai-status">Idle</span>
+                </div>
+                <div class="output-content" id="openai-output">
+                    <span>Awaiting prompt submission...</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Debug Log Section -->
     <div class="debug-container">
         <div class="debug-header">
             <h2>Debug Log</h2>
-            <button class="clear-btn" onclick="clearLogs()">Clear</button>
+            <button class="clear-btn" onclick="clearLogs()">Clear Log</button>
         </div>
         <div id="debug-log"></div>
     </div>
 
     <script>
         const toggle = document.getElementById('mode-toggle');
-        const modeLabel = document.getElementById('current-mode-label');
         const promptInput = document.getElementById('prompt-input');
         const debugLog = document.getElementById('debug-log');
         const submitBtn = document.getElementById('submit-btn');
-        const textOutput = document.getElementById('text-output');
-        const videoOutput = document.getElementById('video-output');
 
-        log('Page loaded successfully. Ready for requests.', 'info');
+        const geminiOutput = document.getElementById('gemini-output');
+        const openaiOutput = document.getElementById('openai-output');
+        const geminiStatus = document.getElementById('gemini-status');
+        const openaiStatus = document.getElementById('openai-status');
+
+        log('Dashboard initialized. Enter a prompt to compare Gemini and OpenAI.', 'info');
 
         toggle.addEventListener('change', () => {
             const mode = toggle.checked ? 'Video Generation' : 'Text Generation';
-            modeLabel.textContent = `(Current: ${mode})`;
-            log(`Mode switched to: ${mode}`, 'info');
+            log(`Generation mode switched to: ${mode}`, 'info');
         });
 
         function log(message, type = 'info') {
@@ -325,44 +356,76 @@
 
         async function sendRequest() {
             const prompt = promptInput.value.trim();
-            const mode = toggle.checked ? 'video' : 'text';
+            const isVideo = toggle.checked;
+            const mode = isVideo ? 'video' : 'text';
 
             if (!prompt) {
-                log('Error: Prompt cannot be empty.', 'error');
+                log('Error: Prompt field is empty.', 'error');
                 return;
             }
 
             submitBtn.disabled = true;
-            log(`Initiating ${mode.toUpperCase()} request...`, 'info');
+            log(`Initiating parallel ${mode.toUpperCase()} requests...`, 'info');
             log(`Prompt: "${prompt}"`, 'info');
 
+            // Reset UI States
+            geminiStatus.textContent = 'Processing...';
+            openaiStatus.textContent = 'Processing...';
+            geminiOutput.innerHTML = `<span>Generating ${mode} via Gemini...</span>`;
+            openaiOutput.innerHTML = `<span>Generating ${mode} via OpenAI...</span>`;
+
+            // Run requests concurrently
+            Promise.all([
+                fetchGeminiOutput(prompt, isVideo),
+                fetchOpenAIOutput(prompt, isVideo)
+            ]).finally(() => {
+                submitBtn.disabled = false;
+            });
+        }
+
+        // Simulates Gemini API fetch
+        async function fetchGeminiOutput(prompt, isVideo) {
             try {
-                if (mode === 'text') {
-                    log('Sending request to Text Generation API...', 'info');
-                    textOutput.innerHTML = '<span>Generating text...</span>';
-                    
-                    await new Promise(resolve => setTimeout(resolve, 1500));
-                    
-                    textOutput.innerHTML = `<p>${prompt}\n\n[Sample generated text result from the API call goes here.]</p>`;
-                    log('Response received: Text updated in Text Box.', 'success');
-                } else {
-                    log('Initiating Video Generation job...', 'info');
-                    videoOutput.innerHTML = '<span>Rendering video...</span>';
-                    
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                    
-                    // Demo sample video output element
-                    videoOutput.innerHTML = `
+                log('[Gemini API] Request dispatched...', 'info');
+                await new Promise(r => setTimeout(r, isVideo ? 2500 : 1200));
+
+                if (isVideo) {
+                    geminiOutput.innerHTML = `
                         <video controls autoplay loop muted>
                             <source src="https://www.w3schools.com/html/mov_bbb.mp4" type="video/mp4">
-                            Your browser does not support HTML video.
                         </video>`;
-                    log('Response received: Video loaded in Video Box.', 'success');
+                    log('[Gemini API] Video rendering complete.', 'success');
+                } else {
+                    geminiOutput.innerHTML = `<p><strong>[Gemini Response]:</strong>\nHere is the generated output from Google Gemini for prompt: "${prompt}"</p>`;
+                    log('[Gemini API] Text response received.', 'success');
                 }
+                geminiStatus.textContent = 'Complete';
             } catch (err) {
-                log(`Request failed: ${err.message}`, 'error');
-            } finally {
-                submitBtn.disabled = false;
+                log(`[Gemini API] Error: ${err.message}`, 'error');
+                geminiStatus.textContent = 'Failed';
+            }
+        }
+
+        // Simulates OpenAI API fetch
+        async function fetchOpenAIOutput(prompt, isVideo) {
+            try {
+                log('[OpenAI API] Request dispatched...', 'info');
+                await new Promise(r => setTimeout(r, isVideo ? 3500 : 1800));
+
+                if (isVideo) {
+                    openaiOutput.innerHTML = `
+                        <video controls autoplay loop muted>
+                            <source src="https://www.w3schools.com/html/movie.mp4" type="video/mp4">
+                        </video>`;
+                    log('[OpenAI API] Sora/Video rendering complete.', 'success');
+                } else {
+                    openaiOutput.innerHTML = `<p><strong>[OpenAI Response]:</strong>\nHere is the generated output from OpenAI GPT for prompt: "${prompt}"</p>`;
+                    log('[OpenAI API] Text response received.', 'success');
+                }
+                openaiStatus.textContent = 'Complete';
+            } catch (err) {
+                log(`[OpenAI API] Error: ${err.message}`, 'error');
+                openaiStatus.textContent = 'Failed';
             }
         }
     </script>
