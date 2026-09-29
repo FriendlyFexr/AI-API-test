@@ -493,37 +493,25 @@
         // ----------------------------------------------------
         async function fetchGroq(prompt, isVideo, apiKey) {
             try {
-                log('[Groq API] Request sent...', 'info');
-
-                if (!isVideo) {
-                    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${apiKey}`
-                        },
-                        body: JSON.stringify({
-                            model: 'llama-3.3-70b-versatile',
-                            messages: [{ role: 'user', content: prompt }]
-                        })
-                    });
-
-                    const data = await response.json();
-                    if (data.error) throw new Error(data.error.message);
-
-                    const resultText = data.choices[0].message.content;
-                    groqOutput.innerHTML = `<p>${resultText}</p>`;
-                    log('[Groq API] Text generated successfully.', 'success');
-                    groqStatus.textContent = 'Complete';
-                } else {
-                    log('[Groq API] Video mode selected. Groq currently only supports text models.', 'error');
-                    groqOutput.innerHTML = `<span style="color:#f85149;">Groq does not support video generation models. Switch to Text Mode.</span>`;
-                    groqStatus.textContent = 'Unsupported';
-                }
+                const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: 'llama-3.1-8b-instant', // Use a text-generation model ID here
+                        messages: [{ role: 'user', content: prompt }]
+                    })
+                });
+        
+                const data = await response.json();
+                if (data.error) throw new Error(data.error.message);
+        
+                const resultText = data.choices[0].message.content;
+                groqOutput.innerHTML = `<p>${resultText}</p>`;
             } catch (err) {
                 log(`[Groq API] Error: ${err.message}`, 'error');
-                groqOutput.innerHTML = `<span style="color:#f85149;">Error: ${err.message}</span>`;
-                groqStatus.textContent = 'Failed';
             }
         }
 
