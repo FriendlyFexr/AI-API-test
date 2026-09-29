@@ -1,433 +1,231 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Multi-Model Comparison Dashboard</title>
-    <style>
-        * {
-            box-sizing: border-box;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        }
+const toggle = document.getElementById('mode-toggle');
+const promptInput = document.getElementById('prompt-input');
+const debugLog = document.getElementById('debug-log');
+const submitBtn = document.getElementById('submit-btn');
 
-        body {
-            background-color: #0d1117;
-            color: #c9d1d9;
-            max-width: 1100px;
-            margin: 0 auto;
-            padding: 20px;
-        }
+const geminiOutput = document.getElementById('gemini-output');
+const openaiOutput = document.getElementById('openai-output');
+const geminiStatus = document.getElementById('gemini-status');
+const openaiStatus = document.getElementById('openai-status');
 
-        h1 {
-            font-size: 1.5rem;
-            margin-bottom: 20px;
-            color: #f0f6fc;
-            text-align: center;
-        }
+// API KEYS (Keep these private or pass via inputs in production)
+const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY";
+const OPENAI_API_KEY = "YOUR_OPENAI_API_KEY";
 
-        .container {
-            background-color: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
+log('Dashboard initialized. Enter API keys and prompt to test.', 'info');
 
-        /* Controls Layout */
-        .controls-bar {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            flex-wrap: wrap;
-        }
+toggle.addEventListener('change', () => {
+    const mode = toggle.checked ? 'Video Generation' : 'Text Generation';
+    log(`Generation mode switched to: ${mode}`, 'info');
+});
 
-        .toggle-group {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 0.9rem;
-        }
+function log(message, type = 'info') {
+    const timestamp = new Date().toLocaleTimeString();
+    const entry = document.createElement('div');
+    entry.className = `log-entry log-${type}`;
+    entry.textContent = `[${timestamp}] [${type.toUpperCase()}] ${message}`;
+    debugLog.appendChild(entry);
+    debugLog.scrollTop = debugLog.scrollHeight;
+}
 
-        .switch {
-            position: relative;
-            display: inline-block;
-            width: 46px;
-            height: 24px;
-        }
+function clearLogs() {
+    debugLog.innerHTML = '';
+    log('Logs cleared.', 'info');
+}
 
-        .switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
+async function sendRequest() {
+    const prompt = promptInput.value.trim();
+    const isVideo = toggle.checked;
 
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background-color: #30363d;
-            transition: .3s;
-            border-radius: 24px;
-        }
+    if (!prompt) {
+        log('Error: Prompt field is empty.', 'error');
+        return;
+    }
 
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 18px;
-            width: 18px;
-            left: 3px;
-            bottom: 3px;
-            background-color: white;
-            transition: .3s;
-            border-radius: 50%;
-        }
+    if (!GEMINI_API_KEY || GEMINI_API_KEY === "YOUR_GEMINI_API_KEY" || 
+        !OPENAI_API_KEY || OPENAI_API_KEY === "YOUR_OPENAI_API_KEY") {
+        log('Error: Please insert valid API keys into the script.', 'error');
+        return;
+    }
 
-        input:checked + .slider {
-            background-color: #238636;
-        }
+    submitBtn.disabled = true;
+    log(`Initiating parallel ${isVideo ? 'VIDEO' : 'TEXT'} requests...`, 'info');
 
-        input:checked + .slider:before {
-            transform: translateX(22px);
-        }
+    geminiStatus.textContent = 'Processing...';
+    openaiStatus.textContent = 'Processing...';
+    geminiOutput.innerHTML = `<span>Generating ${isVideo ? 'video' : 'text'} via Gemini...</span>`;
+    openaiOutput.innerHTML = `<span>Generating ${isVideo ? 'video' : 'text'} via OpenAI...</span>`;
 
-        .mode-label {
-            font-weight: 600;
-            color: #58a6ff;
-        }
+    // Run API requests simultaneously
+    Promise.all([
+        fetchGemini(prompt, isVideo),
+        fetchOpenAI(prompt, isVideo)
+    ]).finally(() => {
+        submitBtn.disabled = false;
+    });
+}
 
-        .input-group {
-            display: flex;
-            flex: 1;
-            gap: 10px;
-            min-width: 300px;
-        }
+// ----------------------------------------------------
+// GOOGLE GEMINI API FETCH
+// ----------------------------------------------------
+async function fetchGemini(prompt, isVideo) {
+    try {
+        log('[Gemini API] Request sent...', 'info');
 
-        input[type="text"] {
-            flex: 1;
-            padding: 10px 14px;
-            background-color: #0d1117;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            color: #c9d1d9;
-            font-size: 0.95rem;
-            outline: none;
-        }
-
-        input[type="text"]:focus {
-            border-color: #58a6ff;
-        }
-
-        .btn-green {
-            background-color: #238636;
-            color: #ffffff;
-            border: 1px solid rgba(240, 246, 252, 0.1);
-            padding: 10px 18px;
-            border-radius: 6px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background-color 0.2s;
-            white-space: nowrap;
-        }
-
-        .btn-green:hover { background-color: #2ea043; }
-        .btn-green:disabled { background-color: #23863680; cursor: not-allowed; }
-
-        /* Side-by-Side Comparison Grid */
-        .comparison-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-
-        @media (max-width: 768px) {
-            .comparison-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .provider-column {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        .output-box {
-            background-color: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .output-title {
-            background-color: #21262d;
-            padding: 10px 14px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            color: #f0f6fc;
-            border-bottom: 1px solid #30363d;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .badge {
-            font-size: 0.75rem;
-            padding: 2px 8px;
-            border-radius: 12px;
-            background-color: #30363d;
-            color: #8b949e;
-        }
-
-        .output-content {
-            padding: 15px;
-            min-height: 200px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background-color: #0d1117;
-            color: #8b949e;
-            font-size: 0.9rem;
-            text-align: center;
-        }
-
-        .output-content p {
-            margin: 0;
-            text-align: left;
-            color: #c9d1d9;
-            white-space: pre-wrap;
-            width: 100%;
-        }
-
-        video {
-            width: 100%;
-            max-height: 240px;
-            border-radius: 6px;
-            outline: none;
-        }
-
-        /* Debug Console */
-        .debug-container {
-            background-color: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            padding: 15px;
-        }
-
-        .debug-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .debug-header h2 {
-            font-size: 1rem;
-            margin: 0;
-            color: #8b949e;
-        }
-
-        .clear-btn {
-            background: none;
-            border: none;
-            color: #58a6ff;
-            cursor: pointer;
-            font-size: 0.8rem;
-        }
-
-        .clear-btn:hover { text-decoration: underline; }
-
-        #debug-log {
-            background-color: #0d1117;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            padding: 10px;
-            height: 150px;
-            overflow-y: auto;
-            font-family: monospace;
-            font-size: 0.85rem;
-            color: #7ee787;
-            white-space: pre-wrap;
-        }
-
-        .log-entry { margin-bottom: 4px; }
-        .log-info { color: #58a6ff; }
-        .log-success { color: #7ee787; }
-        .log-error { color: #f85149; }
-    </style>
-</head>
-<body>
-
-    <h1>Gemini vs OpenAI Comparison Dashboard</h1>
-
-    <div class="container">
-        <div class="controls-bar">
-            <!-- Mode Selector -->
-            <div class="toggle-group">
-                <span>Text Mode</span>
-                <label class="switch">
-                    <input type="checkbox" id="mode-toggle">
-                    <span class="slider"></span>
-                </label>
-                <span>Video Mode</span>
-            </div>
-
-            <!-- Input Form -->
-            <div class="input-group">
-                <input type="text" id="prompt-input" placeholder="Enter prompt to test both models..." />
-                <button class="btn-green" id="submit-btn" onclick="sendRequest()">Generate Both</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Side-by-Side Comparison Layout -->
-    <div class="comparison-grid">
-        
-        <!-- Google Gemini Column -->
-        <div class="provider-column">
-            <div class="output-box">
-                <div class="output-title">
-                    <span>Google Gemini API</span>
-                    <span class="badge" id="gemini-status">Idle</span>
-                </div>
-                <div class="output-content" id="gemini-output">
-                    <span>Awaiting prompt submission...</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- OpenAI Column -->
-        <div class="provider-column">
-            <div class="output-box">
-                <div class="output-title">
-                    <span>OpenAI API</span>
-                    <span class="badge" id="openai-status">Idle</span>
-                </div>
-                <div class="output-content" id="openai-output">
-                    <span>Awaiting prompt submission...</span>
-                </div>
-            </div>
-        </div>
-
-    </div>
-
-    <!-- Debug Log Section -->
-    <div class="debug-container">
-        <div class="debug-header">
-            <h2>Debug Log</h2>
-            <button class="clear-btn" onclick="clearLogs()">Clear Log</button>
-        </div>
-        <div id="debug-log"></div>
-    </div>
-
-    <script>
-        const toggle = document.getElementById('mode-toggle');
-        const promptInput = document.getElementById('prompt-input');
-        const debugLog = document.getElementById('debug-log');
-        const submitBtn = document.getElementById('submit-btn');
-
-        const geminiOutput = document.getElementById('gemini-output');
-        const openaiOutput = document.getElementById('openai-output');
-        const geminiStatus = document.getElementById('gemini-status');
-        const openaiStatus = document.getElementById('openai-status');
-
-        log('Dashboard initialized. Enter a prompt to compare Gemini and OpenAI.', 'info');
-
-        toggle.addEventListener('change', () => {
-            const mode = toggle.checked ? 'Video Generation' : 'Text Generation';
-            log(`Generation mode switched to: ${mode}`, 'info');
-        });
-
-        function log(message, type = 'info') {
-            const timestamp = new Date().toLocaleTimeString();
-            const entry = document.createElement('div');
-            entry.className = `log-entry log-${type}`;
-            entry.textContent = `[${timestamp}] [${type.toUpperCase()}] ${message}`;
-            debugLog.appendChild(entry);
-            debugLog.scrollTop = debugLog.scrollHeight;
-        }
-
-        function clearLogs() {
-            debugLog.innerHTML = '';
-            log('Logs cleared.', 'info');
-        }
-
-        async function sendRequest() {
-            const prompt = promptInput.value.trim();
-            const isVideo = toggle.checked;
-            const mode = isVideo ? 'video' : 'text';
-
-            if (!prompt) {
-                log('Error: Prompt field is empty.', 'error');
-                return;
-            }
-
-            submitBtn.disabled = true;
-            log(`Initiating parallel ${mode.toUpperCase()} requests...`, 'info');
-            log(`Prompt: "${prompt}"`, 'info');
-
-            // Reset UI States
-            geminiStatus.textContent = 'Processing...';
-            openaiStatus.textContent = 'Processing...';
-            geminiOutput.innerHTML = `<span>Generating ${mode} via Gemini...</span>`;
-            openaiOutput.innerHTML = `<span>Generating ${mode} via OpenAI...</span>`;
-
-            // Run requests concurrently
-            Promise.all([
-                fetchGeminiOutput(prompt, isVideo),
-                fetchOpenAIOutput(prompt, isVideo)
-            ]).finally(() => {
-                submitBtn.disabled = false;
+        if (!isVideo) {
+            // Text Generation via Gemini 1.5 Flash
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }]
+                })
             });
+
+            const data = await response.json();
+
+            if (data.error) throw new Error(data.error.message);
+
+            const resultText = data.candidates[0].content.parts[0].text;
+            geminiOutput.innerHTML = `<p>${resultText}</p>`;
+            log('[Gemini API] Text generated successfully.', 'success');
+            geminiStatus.textContent = 'Complete';
+        } else {
+            // Video Generation Polling (Asynchronous Job)
+            log('[Gemini API] Submitting Video Generation task...', 'info');
+            const startUrl = `https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-generate-001:predictLongRunning?key=${GEMINI_API_KEY}`;
+            
+            const response = await fetch(startUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    prompt: { text: prompt }
+                })
+            });
+
+            const job = await response.json();
+            if (job.error) throw new Error(job.error.message);
+
+            log(`[Gemini API] Video task started. Operation: ${job.name}`, 'info');
+            
+            // Poll for job completion
+            await pollVideoJob(job.name, GEMINI_API_KEY, geminiOutput, geminiStatus, 'Gemini');
         }
+    } catch (err) {
+        log(`[Gemini API] Error: ${err.message}`, 'error');
+        geminiOutput.innerHTML = `<span style="color:#f85149;">Error: ${err.message}</span>`;
+        geminiStatus.textContent = 'Failed';
+    }
+}
 
-        // Simulates Gemini API fetch
-        async function fetchGeminiOutput(prompt, isVideo) {
-            try {
-                log('[Gemini API] Request dispatched...', 'info');
-                await new Promise(r => setTimeout(r, isVideo ? 2500 : 1200));
+// ----------------------------------------------------
+// OPENAI API FETCH
+// ----------------------------------------------------
+async function fetchOpenAI(prompt, isVideo) {
+    try {
+        log('[OpenAI API] Request sent...', 'info');
 
-                if (isVideo) {
-                    geminiOutput.innerHTML = `
-                        <video controls autoplay loop muted>
-                            <source src="https://www.w3schools.com/html/mov_bbb.mp4" type="video/mp4">
-                        </video>`;
-                    log('[Gemini API] Video rendering complete.', 'success');
-                } else {
-                    geminiOutput.innerHTML = `<p><strong>[Gemini Response]:</strong>\nHere is the generated output from Google Gemini for prompt: "${prompt}"</p>`;
-                    log('[Gemini API] Text response received.', 'success');
-                }
-                geminiStatus.textContent = 'Complete';
-            } catch (err) {
-                log(`[Gemini API] Error: ${err.message}`, 'error');
-                geminiStatus.textContent = 'Failed';
+        if (!isVideo) {
+            // Text Generation via GPT-4o-mini
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${OPENAI_API_KEY}`
+                },
+                body: JSON.stringify({
+                    model: 'gpt-4o-mini',
+                    messages: [{ role: 'user', content: prompt }]
+                })
+            });
+
+            const data = await response.json();
+            if (data.error) throw new Error(data.error.message);
+
+            const resultText = data.choices[0].message.content;
+            openaiOutput.innerHTML = `<p>${resultText}</p>`;
+            log('[OpenAI API] Text generated successfully.', 'success');
+            openaiStatus.textContent = 'Complete';
+        } else {
+            // Video Generation via OpenAI Sora API
+            log('[OpenAI API] Requesting video generation...', 'info');
+            const response = await fetch('https://api.openai.com/v1/videos', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${OPENAI_API_KEY}`
+                },
+                body: JSON.stringify({
+                    model: 'sora-1.0',
+                    prompt: prompt,
+                    size: '1280x720'
+                })
+            });
+
+            const data = await response.json();
+            if (data.error) throw new Error(data.error.message);
+
+            // Poll video status
+            await pollOpenAIVideo(data.id, openaiOutput, openaiStatus);
+        }
+    } catch (err) {
+        log(`[OpenAI API] Error: ${err.message}`, 'error');
+        openaiOutput.innerHTML = `<span style="color:#f85149;">Error: ${err.message}</span>`;
+        openaiStatus.textContent = 'Failed';
+    }
+}
+
+// Polling Helper for Video Operations
+async function pollVideoJob(operationName, apiKey, outputElement, statusElement, providerName) {
+    const pollUrl = `https://generativelanguage.googleapis.com/v1beta/${operationName}?key=${apiKey}`;
+    
+    let isDone = false;
+    while (!isDone) {
+        await new Promise(r => setTimeout(r, 5000)); // Wait 5s between checks
+        log(`[${providerName} API] Polling video render status...`, 'info');
+
+        const res = await fetch(pollUrl);
+        const data = await res.json();
+
+        if (data.done) {
+            isDone = true;
+            if (data.response && data.response.generatedVideos) {
+                const videoUri = data.response.generatedVideos[0].videoUri;
+                outputElement.innerHTML = `
+                    <video controls autoplay loop>
+                        <source src="${videoUri}" type="video/mp4">
+                    </video>`;
+                log(`[${providerName} API] Video rendering completed!`, 'success');
+                statusElement.textContent = 'Complete';
+            } else {
+                throw new Error("Video task finished without output URL.");
             }
         }
+    }
+}
 
-        // Simulates OpenAI API fetch
-        async function fetchOpenAIOutput(prompt, isVideo) {
-            try {
-                log('[OpenAI API] Request dispatched...', 'info');
-                await new Promise(r => setTimeout(r, isVideo ? 3500 : 1800));
+async function pollOpenAIVideo(videoId, outputElement, statusElement) {
+    let isDone = false;
+    while (!isDone) {
+        await new Promise(r => setTimeout(r, 5000));
+        log('[OpenAI API] Checking video render progress...', 'info');
 
-                if (isVideo) {
-                    openaiOutput.innerHTML = `
-                        <video controls autoplay loop muted>
-                            <source src="https://www.w3schools.com/html/movie.mp4" type="video/mp4">
-                        </video>`;
-                    log('[OpenAI API] Sora/Video rendering complete.', 'success');
-                } else {
-                    openaiOutput.innerHTML = `<p><strong>[OpenAI Response]:</strong>\nHere is the generated output from OpenAI GPT for prompt: "${prompt}"</p>`;
-                    log('[OpenAI API] Text response received.', 'success');
-                }
-                openaiStatus.textContent = 'Complete';
-            } catch (err) {
-                log(`[OpenAI API] Error: ${err.message}`, 'error');
-                openaiStatus.textContent = 'Failed';
-            }
+        const res = await fetch(`https://api.openai.com/v1/videos/${videoId}`, {
+            headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}` }
+        });
+        const data = await res.json();
+
+        if (data.status === 'succeeded') {
+            isDone = true;
+            outputElement.innerHTML = `
+                <video controls autoplay loop>
+                    <source src="${data.video_url}" type="video/mp4">
+                </video>`;
+            log('[OpenAI API] Video generation completed!', 'success');
+            statusElement.textContent = 'Complete';
+        } else if (data.status === 'failed') {
+            throw new Error(data.error || 'Video rendering failed');
         }
-    </script>
-</body>
-</html>
+    }
+}
